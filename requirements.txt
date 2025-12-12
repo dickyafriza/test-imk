@@ -1,0 +1,12 @@
+streamlit
+pandas>=2.0
+numpy>=1.23
+scikit-learn>=1.2,<1.6
+joblib>=1.2
+chardet>=5.0
+streamlit
+pandas
+numpy
+scikit-learn
+chardet
+openpyxl
