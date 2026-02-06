@@ -152,6 +152,12 @@ if uploaded_file is not None:
 
     # Normalisasi kolom & strip spasi
     df.columns = [str(c).strip() for c in df.columns]
+    
+    # Hapus kolom "Unnamed" yang muncul dari index tersimpan
+    unnamed_cols = [c for c in df.columns if c.lower().startswith('unnamed')]
+    if unnamed_cols:
+        df = df.drop(columns=unnamed_cols)
+    
     for c in df.columns:
         if df[c].dtype == object:
             df[c] = df[c].astype(str).str.strip()
