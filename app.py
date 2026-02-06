@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 
 import joblib
 
@@ -193,21 +193,18 @@ if uploaded_file is not None:
         remainder='drop'
     )
 
-    rf = RandomForestClassifier(
-        random_state=42,
+    knn = KNeighborsClassifier(
         n_jobs=-1
     )
 
-    pipe = Pipeline([('prep', ct), ('clf', rf)])
+    pipe = Pipeline([('prep', ct), ('clf', knn)])
     # ----------------------------------
 
     # --------- GridSearchCV ----------
     param_grid = {
-        'clf__n_estimators': [300, 600, 900],
-        'clf__max_depth': [None, 20, 40],
-        'clf__min_samples_split': [2, 5],
-        'clf__min_samples_leaf': [1, 2],
-        'clf__class_weight': ['balanced']
+        'clf__n_neighbors': [3, 5, 7, 9, 11],
+        'clf__weights': ['uniform', 'distance'],
+        'clf__metric': ['euclidean', 'manhattan', 'cosine']
     }
 
     grid = GridSearchCV(
@@ -239,18 +236,18 @@ if uploaded_file is not None:
 
             grid.fit(X_tr, y_tr)
 
-            st.success("Model dilatih dengan GridSearchCV (TF-IDF + RandomForest).")
+            st.success("Model dilatih dengan GridSearchCV (TF-IDF + KNN).")
             st.write("Best params:", grid.best_params_)
             st.write("Best CV score:", f"{grid.best_score_:.3f}")
 
             best_model = grid.best_estimator_
         else:
-            pipe.set_params(clf__n_estimators=800, clf__class_weight='balanced')
+            pipe.set_params(clf__n_neighbors=5, clf__weights='distance')
             pipe.fit(X_t, y_t)
             best_model = pipe
             st.warning("Model dilatih tanpa split/grid (kelas jarang).")
     else:
-        pipe.set_params(clf__n_estimators=100, clf__class_weight='balanced')
+        pipe.set_params(clf__n_neighbors=5, clf__weights='distance')
         pipe.fit(
             X_all,
             np.random.choice([f"{i:02d}" for i in range(10, 34)], size=len(X_all))
@@ -400,5 +397,5 @@ if uploaded_file is not None:
 
     # Opsional: simpan model
     if st.checkbox("Simpan model ke file .joblib di server"):
-        joblib.dump(best_model, "model_kbli2_rf_tfidf_grid.joblib")
-        st.success("Model disimpan sebagai model_kbli2_rf_tfidf_grid.joblib")
+        joblib.dump(best_model, "model_kbli2_knn_tfidf_grid.joblib")
+        st.success("Model disimpan sebagai model_kbli2_knn_tfidf_grid.joblib")
