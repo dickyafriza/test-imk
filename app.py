@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
 
 import joblib
 
@@ -17,7 +17,7 @@ st.set_page_config(page_title="Klasifikasi KBLI 2 Digit", layout="wide")
 st.title("Klasifikasi KBLI 2 Digit dari Teks")
 
 st.write(
-    "Upload file mentah (CSV/Excel) berisi minimal kolom r101–r107, r213, "
+    "Upload file mentah (CSV/Excel) berisi minimal kolom r101–r1s07, r213, "
     "r215a1_label / r215b / r215d, r216_value / r216_label, dan r215c_url untuk gambar."
 )
 
@@ -72,20 +72,61 @@ label_map = {
 def apply_iterative_rules_simple(df, cols, max_iters=3, conf_thr=0.70):
     txt = df[cols].fillna('').agg(' '.join, axis=1).str.upper()
 
+    # Rules dengan prioritas tinggi (lebih spesifik) di atas
     rules = [
-        (r'\bKABEL\b|\bTRAFO\b|\bAMPLI(FIER)?\b|\bINVERTER\b', '27'),
-        (r'\bCPU\b|\bLAPTOP\b|\bKAMERA\b|\bOPTIK\b', '26'),
-        (r'\bMESIN\b|\bDINAMO\b|\bPOMPA\b|\bKOMPRESOR\b', '28'),
-        (r'\bKURSI\b|\bMEJA\b|\bLEMARI\b|\bDIPAN\b|\bSOFA\b', '31'),
-        (r'\bKERTAS\b|\bAGENDA MAP\b', '17'),
-        (r'\bCETAK\b|\bPERCETAKAN\b|\bUNDANGAN\b|\bSTIKER\b|\bSABLON\b', '18'),
-        (r'\bLEM\b|\bCAT\b|\bRESIN\b', '20'),
-        (r'\bKARET\b|\bPLASTIK\b', '22'),
-        (r'\bTEPUNG\b|\bSINGKONG\b|\bBERAS\b|\bKUE\b|\bTEMPE\b|\bGETHUK\b|\bTAHU\b', '10'),
-        (r'\bAIR MINUM\b|\bSIRUP\b|\bMINUMAN\b|\bAIR ISI ULANG\b', '11'),
-        (r'\bBATA\b|\bBATU BATA\b|\bGENTENG\b|\bTEGEL\b|\bPAVING\b', '23'),
-        (r'\bKERAMIK\b|\bGRANIT\b', '23'),
-        (r'\bKAOS\b|\bT-SHIRT\b|\bKOSTUM\b', '14'),
+        # === INDUSTRI PERALATAN LISTRIK (27) ===
+        (r'\bKABEL\b|\bTRAFO\b|\bAMPLI(FIER)?\b|\bINVERTER\b|\bPOWER\s*AMPLI\b|\bGENERATOR\b|\bTRANSFORMATOR\b', '27'),
+        
+        # === INDUSTRI KOMPUTER, ELEKTRONIK, OPTIK (26) ===
+        (r'\bCPU\b|\bLAPTOP\b|\bKAMERA\b|\bOPTIK\b|\bKOMPUTER\b|\bELEKTRONIK\b', '26'),
+        
+        # === INDUSTRI MESIN DAN PERLENGKAPAN (28) ===
+        (r'\bMESIN\s*CHOPPER\b|\bMESIN\s*PERTANIAN\b|\bYTDL\b|\bMESIN\b|\bDINAMO\b|\bPOMPA\b|\bKOMPRESOR\b|\bTRAKTOR\b', '28'),
+        
+        # === INDUSTRI FURNITUR (31) ===
+        (r'\bKURSI\b|\bMEJA\b|\bLEMARI\b|\bDIPAN\b|\bSOFA\b|\bRAK\b|\bNAKAS\b|\bBUFFET\b', '31'),
+        
+        # === INDUSTRI KERTAS (17) ===
+        (r'\bKERTAS\s*DOS\b|\bKARTON\b|\bAGENDA\s*MAP\b|\bDOS\s*KARTON\b', '17'),
+        
+        # === INDUSTRI PENCETAKAN (18) ===
+        (r'\bCETAK\b|\bPERCETAKAN\b|\bUNDANGAN\b|\bSTIKER\b|\bSABLON\b|\bVINYL\b|\bMMT\b|\bBANNER\b|\bSPANDUK\b', '18'),
+        
+        # === INDUSTRI BAHAN KIMIA (20) ===
+        (r'\bLEM\b|\bCAT\b|\bRESIN\b|\bKIMIA\b|\bPELARUT\b', '20'),
+        
+        # === INDUSTRI FARMASI, OBAT TRADISIONAL (21) ===
+        (r'\bJAMU\b|\bOBAT\s*TRADISIONAL\b|\bHERBAL\b|\bJAMU\s*TRADISIONAL\b', '21'),
+        
+        # === INDUSTRI KARET DAN PLASTIK (22) ===
+        (r'\bKARET\b|\bPLASTIK\b|\bUPVC\b|\bPVC\b|\bFIBER\b|\bPOLYSTER\b|\bKACA\b|\bPINTU\b.*\bJENDELA\b|\bJENDELA\b.*\bPINTU\b', '22'),
+        
+        # === INDUSTRI BARANG GALIAN BUKAN LOGAM (23) ===
+        (r'\bBATA\b|\bBATU\s*BATA\b|\bGENTENG\b|\bTEGEL\b|\bPAVING\b|\bKERAMIK\b|\bGRANIT\b|\bMARMER\b', '23'),
+        
+        # === INDUSTRI BARANG LOGAM (25) ===
+        (r'\bGALFALUM\b|\bSENG\b|\bBESI\b|\bALUMINIUM\b|\bSTENLIS\b|\bSTAINLESS\b|\bLOGAM\b|\bHOLDER\b|\bDUDUKAN\b.*\bPLAT\b|\bLETTER\s*TIMBUL\b', '25'),
+        
+        # === INDUSTRI MAKANAN (10) ===
+        (r'\bTEPUNG\b|\bSINGKONG\b|\bBERAS\b|\bKUE\b|\bTEMPE\b|\bGETHUK\b|\bTAHU\b|\bREMPAH\b|\bNASI\b|\bKUCING\b|\bMAKANAN\b|\bSANGKAR\s*BURUNG\b|\bPAKAN\b', '10'),
+        
+        # === INDUSTRI MINUMAN (11) ===
+        (r'\bAIR\s*MINUM\b|\bSIRUP\b|\bMINUMAN\b|\bAIR\s*ISI\s*ULANG\b|\bAQUA\b', '11'),
+        
+        # === INDUSTRI TEKSTIL (13) ===
+        (r'\bKAPUK\b|\bBANTAL\b|\bGULING\b|\bKAIN\b|\bKORDEN\b|\bGORDEN\b|\bKANVAS\b(?!\s*OLIVE)|\bTENUN\b|\bBATIK\b|\bSARUNG\b(?!\s*JOK)', '13'),
+        
+        # === INDUSTRI PAKAIAN JADI (14) ===
+        (r'\bKAOS\b|\bT-SHIRT\b|\bKOSTUM\b|\bBUSANA\b|\bKONFEKSI\b|\bSPREI\b|\bIMITASI\b|\bPAKAIAN\b|\bCELANA\b|\bKEMEJA\b|\bJAKET\b', '14'),
+        
+        # === INDUSTRI KULIT DAN ALAS KAKI (15) ===
+        (r'\bKULIT\b|\bSEPATU\b|\bSANDAL\b|\bTAS\b|\bTOTE\s*BAG\b|\bDOMPET\b|\bIMITASI\b|\bSARUNG\s*JOK\b|\bJOK\s*MOTOR\b', '15'),
+        
+        # === INDUSTRI KAYU (16) ===
+        (r'\bKAYU\b|\bROTAN\b|\bANYAMAN\b|\bKAYU\s*ASEM\b|\bPACKING\b|\bPALET\b|\bKAYU\s*JATI\b|\bPIPA\s*ROKOK\b|\bKERAJINAN\s*KAYU\b', '16'),
+        
+        # === INDUSTRI PENGOLAHAN LAINNYA (32) ===
+        (r'\bREBANA\b|\bKULIT\s*KABING\b|\bALAT\s*MUSIK\b|\bKERAJINAN\b|\bSANGKAR\b', '32'),
     ]
 
     changed, it = True, 0
@@ -199,25 +240,32 @@ if uploaded_file is not None:
         remainder='drop'
     )
 
-    knn = KNeighborsClassifier()
+    svm = SVC(probability=True, random_state=42)
 
-    pipe = Pipeline([('prep', ct), ('clf', knn)])
+    pipe = Pipeline([('prep', ct), ('clf', svm)])
     # ----------------------------------
 
     # --------- GridSearchCV ----------
-    param_grid = {
-        'clf__n_neighbors': [3, 5, 7, 9, 11],      # jumlah tetangga terdekat
-        'clf__weights': ['uniform', 'distance'],     # bobot berdasarkan jarak
-        'clf__metric': ['euclidean', 'manhattan', 'cosine']  # metrik jarak
-    }
+    param_grid = [
+        {   # Linear kernel — paling umum untuk teks
+            'clf__kernel': ['linear'],
+            'clf__C': [0.1, 0.5, 1, 5, 10],
+        },
+        {   # RBF kernel — bisa tangkap pola non-linear
+            'clf__kernel': ['rbf'],
+            'clf__C': [0.1, 1, 10],
+            'clf__gamma': ['scale', 'auto', 0.01, 0.1],
+        },
+    ]
 
     grid = GridSearchCV(
         estimator=pipe,
         param_grid=param_grid,
-        cv=3,
+        cv=5,           # 5-fold cross validation untuk hasil lebih stabil
         n_jobs=-1,
         verbose=1,
-        scoring='accuracy'
+        scoring='accuracy',
+        return_train_score=True  # untuk melihat train score juga
     )
     # ---------------------------------
 
@@ -240,18 +288,39 @@ if uploaded_file is not None:
 
             grid.fit(X_tr, y_tr)
 
-            st.success("Model dilatih dengan GridSearchCV (TF-IDF + KNN).")
-            st.write("Best params:", grid.best_params_)
-            st.write("Best CV score:", f"{grid.best_score_:.3f}")
+            st.success("Model dilatih dengan GridSearchCV (TF-IDF + SVM).")
+            
+            # Tampilkan hasil terbaik
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Best CV Score", f"{grid.best_score_:.3f}")
+            with col2:
+                test_acc = grid.score(X_te, y_te)
+                st.metric("Test Accuracy", f"{test_acc:.3f}")
+            with col3:
+                train_acc = grid.score(X_tr, y_tr)
+                st.metric("Train Accuracy", f"{train_acc:.3f}")
+            
+            st.write("**Best Parameters:**", grid.best_params_)
+            
+            # Tampilkan Top 5 kombinasi parameter
+            import pandas as pd
+            cv_results = pd.DataFrame(grid.cv_results_)
+            top5 = cv_results.nsmallest(5, 'rank_test_score')[
+                ['params', 'mean_test_score', 'std_test_score', 'mean_train_score']
+            ].reset_index(drop=True)
+            top5.columns = ['Parameters', 'Mean CV Score', 'Std CV Score', 'Mean Train Score']
+            st.write("**Top 5 Kombinasi Parameter:**")
+            st.dataframe(top5)
 
             best_model = grid.best_estimator_
         else:
-            pipe.set_params(clf__n_neighbors=5, clf__weights='distance')
+            pipe.set_params(clf__kernel='linear', clf__C=1.0)
             pipe.fit(X_t, y_t)
             best_model = pipe
             st.warning("Model dilatih tanpa split/grid (kelas jarang).")
     else:
-        pipe.set_params(clf__n_neighbors=5, clf__weights='distance')
+        pipe.set_params(clf__kernel='linear', clf__C=1.0)
         pipe.fit(
             X_all,
             np.random.choice([f"{i:02d}" for i in range(10, 34)], size=len(X_all))
@@ -401,5 +470,5 @@ if uploaded_file is not None:
 
     # Opsional: simpan model
     if st.checkbox("Simpan model ke file .joblib di server"):
-        joblib.dump(best_model, "model_kbli2_knn_tfidf_grid.joblib")
-        st.success("Model disimpan sebagai model_kbli2_knn_tfidf_grid.joblib")
+        joblib.dump(best_model, "model_kbli2_svm_tfidf_grid.joblib")
+        st.success("Model disimpan sebagai model_kbli2_svm_tfidf_grid.joblib")
